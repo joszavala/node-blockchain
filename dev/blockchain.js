@@ -4,6 +4,7 @@ const currentNodeUrl = process.argv[3];
 function Blockchain() {
     this.chain = [];
     this.pendingTransactions = [];
+    console.log(currentNodeUrl);
     this.currentNodeUrl = currentNodeUrl;
     this.networkNodes = [];
     this.createNewBlock(100, '0', '0');
