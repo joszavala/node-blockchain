@@ -14,6 +14,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
 app.get('/blockchain', (req, res) => {
+    console.log(caronte.chain.length);
     res.send(caronte);
 });
 
@@ -181,6 +182,59 @@ app.post('/register-nodes-bulk' , (req, res) => {
 
     res.json({ note: 'Bulk registration successful.'});
 }); 
+
+app.get('/consensus', (req, res) => {
+    const requestPromises = [];
+    caronte.networkNodes.forEach(networkNodeUrl => {
+        console.log(`${networkNodeUrl}/blockchain`);
+        const requestOptions = {
+            uri: `${networkNodeUrl}/blockchain`,
+            method: 'GET',
+            json:true
+        };
+
+        requestPromises.push(rp(requestOptions));
+    });
+
+    Promise.all(requestPromises)
+    .then(blockchains => {
+        const currentChainLength = caronte.chain.length;
+        const longestChainSettings = {
+            maxChainLength: currentChainLength,
+            newLongestChain: null,
+            newPendingTransactions: null
+        };
+        console.log(longestChainSettings);
+        blockchains.forEach(blockchain => {
+            if (blockchain.chain.length > longestChainSettings.maxChainLength) {
+                longestChainSettings.maxChainLength = blockchain.chain.length;
+                longestChainSettings.newLongestChain = blockchain.chain;
+                longestChainSettings.newPendingTransactions = blockchain.pendingTransactions;
+            }
+        });
+
+        if (!longestChainSettings.newLongestChain || (longestChainSettings.newLongestChain && !caronte.chainIsValid(longestChainSettings.newLongestChain))){
+            console.log(longestChainSettings.maxChainLength);
+            res.json({
+                note: 'Current chain has not been replaced',
+                chain: caronte.chain
+            });
+        } else {
+            caronte.chain = longestChainSettings.newLongestChain;
+            caronte.pendingTransactions = longestChainSettings.newPendingTransactions;
+            console.log(longestChainSettings.maxChainLength);
+            res.json({
+                note: 'Current chain has been replaced',
+                chain: caronte.chain
+            });
+        }
+    }).catch(err => { 
+        res.json({
+            note: 'Ha ocurrido una excepcion',
+            exception: err
+        });
+    });
+});
 
 app.listen(port, () => {
     console.log(`Listening on port ${port}...`);

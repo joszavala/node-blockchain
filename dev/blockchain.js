@@ -5,7 +5,6 @@ const currentNodeUrl = process.argv[3];
 function Blockchain() {
     this.chain = [];
     this.pendingTransactions = [];
-    console.log(currentNodeUrl);
     this.currentNodeUrl = currentNodeUrl;
     this.networkNodes = [];
     this.createNewBlock(100, '0', '0');
@@ -52,7 +51,7 @@ Blockchain.prototype.createNewTransaction = function (amount, sender, recipient)
 Blockchain.prototype.addTransactionToPendindgTransactions = function (transactionObj) {
     this.pendingTransactions.push(transactionObj);
 
-    return this.getLastBlock()['index'] + 1;
+    return this.getLastBlock().index + 1;
 }
 
 Blockchain.prototype.hashBlock = function (previousBlockHash, currentBlockData, nonce) {
@@ -73,5 +72,45 @@ Blockchain.prototype.proofOfWork = function (previousBlockHash, currentBlockData
 
     return nonce;
 }
+
+Blockchain.prototype.chainIsValid = function (blockchain) {
+    let validChain = validateGenesisBlock(blockchain[0]);
+
+    if (validChain) {
+        for (var i = 1; i < blockchain.length; i++) {
+            if(!this.isValidChainBlock(blockchain[i], blockchain[i-1])){
+                validChain = false;
+                break;
+            }
+        }
+    }
+    console.log(validChain);
+    return validChain;
+}
+
+function validateGenesisBlock (blockchain) {
+    const genesisVerifiedData = {
+        nonce: 100,
+        previousBlockHash: '0',
+        hash: '0',
+        transactions: 0
+    };
+
+    if (blockchain.nonce !== genesisVerifiedData.nonce || blockchain.previousBlockHash !== genesisVerifiedData.previousBlockHash || blockchain.hash !== genesisVerifiedData.hash || blockchain.transactions.length !== genesisVerifiedData.transactions)
+        return  false;
+
+    return true;
+}
+
+Blockchain.prototype.isValidChainBlock = function(currentBlock, prevBlock) {
+    const blockHash = this.hashBlock(prevBlock.hash, {transactions: currentBlock.transactions, index: currentBlock.index}, currentBlock.nonce);
+
+    if (blockHash.substring(0,4) !== '0000' || currentBlock.previousBlockHash !== prevBlock.hash){
+        return false;
+    }
+
+    return true;
+}
+
 
 module.exports = Blockchain;
