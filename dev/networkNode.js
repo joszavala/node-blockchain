@@ -18,10 +18,37 @@ app.get('/blockchain', (req, res) => {
 });
 
 app.post('/transaction', (req, res) => {
-    const { amount, sender, recipient } = req.body;
-    const blockIndex = caronte.createNewTransaction(amount, sender, recipient);
+    const newTransaction = req.body;
+    const blockIndex = caronte.addTransactionToPendindgTransactions(newTransaction);
 
-    res.json({note: `Transaction will be added in block ${blockIndex}.`});
+    res.json({note: `Transaction will be added en block ${blockIndex}`});
+});
+
+app.post('/transaction/broadcast', (req, res) => {
+    const { sender, amount, recipient } = req.body;
+    const newTransaction = caronte.createNewTransaction(amount, sender, recipient);
+    const reqPromises = [];
+
+    caronte.addTransactionToPendindgTransactions(newTransaction);
+
+    caronte.networkNodes.forEach(networkNodeUrl => {
+        const requestOptions = {
+            uri: `${networkNodeUrl}/transaction`,
+            method: 'POST',
+            body: newTransaction,
+            json: true
+        };
+
+        reqPromises.push(rp(requestOptions));
+    });
+
+    Promise.all(reqPromises)
+    .then(data => {
+        res.json({note: 'Transaction created and broadcast successfully'});
+    })
+    .catch(err => {
+        res.json({error: err});
+    });
 });
 
 app.get('/mine', (req, res) => {
@@ -34,15 +61,65 @@ app.get('/mine', (req, res) => {
 
     const nonce = caronte.proofOfWork(previousBlockHash, currentBlockData);
     const blockHash = caronte.hashBlock(previousBlockHash,currentBlockData, nonce);
-
-    caronte.createNewTransaction(12.5, "00", nodeAddress);
-
     const newBlock = caronte.createNewBlock(nonce,previousBlockHash, blockHash);
+    const requestPromises = [];
 
-    res.json({
-        notes: "New block mined successfully.",
-        block: newBlock
+    caronte.networkNodes.forEach(networkNodeUrl =>{
+        const requestOptions = {
+            uri: `${networkNodeUrl}/receive-new-block`,
+            method: 'POST',
+            body: { newBlock },
+            json: true
+        };
+
+        requestPromises.push(rp(requestOptions));
     });
+
+    Promise.all(requestPromises)
+    .then(data => {
+        const requestOptions = {
+            uri: `${caronte.currentNodeUrl}/transaction/broadcast`,
+            method: 'POST',
+            body: {
+                amount: 12.5,
+                sender: "00",
+                recipient: nodeAddress
+            },
+            json: true
+        };
+
+        return rp(requestOptions);
+    })
+    .then(data => {
+        res.json({
+            notes: "New block mined and broadcast successfully.",
+            block: newBlock
+        });
+    })
+    .catch(err => {
+        res.json({error: err});
+    });
+});
+
+app.post('/receive-new-block', (req, res) => {
+    const newBlock = req.body.newBlock;
+    const lastBlock = caronte.getLastBlock();
+    const correctHash = lastBlock.hash === newBlock.previousBlockHash;
+    const correctIndex = lastBlock['index'] + 1 === newBlock['index'];
+
+    if (correctHash  && correctIndex) {
+        caronte.chain.push(newBlock);
+        caronte.pendingTransactions = [];
+        res.json({
+            note:'New block received and accepted',
+            newBlock
+        });
+    } else {
+        res.json({
+            note: 'New block rejected',
+            newBlock
+        });
+    }
 });
 
 app.post('/register-and-broadcast-node', (req, res) =>{
@@ -87,7 +164,7 @@ app.post('/register-node', (req, res) => {
     const { newNodeUrl } = req.body;
     const nodeNotAlreadyPresent = caronte.networkNodes.indexOf(newNodeUrl) === -1;
     const notCurrentNode = caronte.currentNodeUrl !== newNodeUrl;
-    
+
     if (nodeNotAlreadyPresent && notCurrentNode) caronte.networkNodes.push(newNodeUrl);
 
     res.json({ note: 'new node register successfully with node' });
