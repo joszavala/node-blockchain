@@ -236,6 +236,41 @@ app.get('/consensus', (req, res) => {
     });
 });
 
+app.get('/block/:blockHash', (req,res) =>{
+   const {blockHash} = req.params;
+   const blockData = caronte.getBlock(blockHash);
+
+   res.json({
+       block: blockData
+   });
+});
+
+app.get('/transaction/:transactionId', (req,res) =>{
+    const {transactionId} = req.params;
+    const {block, transaction} = caronte.getTransaction(transactionId);
+
+    res.json({
+        transaction,
+        block
+    });
+});
+
+app.get('/address/:address', (req,res) =>{
+    const {address} = req.params;
+    const {transactions, balance} = caronte.getAddress(address);
+
+    res.json({
+        addressData : {
+                        transactions,
+                        balance
+                    }
+    });
+});
+
+app.get('/block-explorer', (req, res) => {
+   res.sendFile('./block-explorer/index.html', {root: __dirname });
+});
+
 app.listen(port, () => {
     console.log(`Listening on port ${port}...`);
 });
